@@ -1,0 +1,5 @@
+/.nova
+/build
+/*.pdx
+/Source/pdex.bin
+/Source/pdex.dylib
