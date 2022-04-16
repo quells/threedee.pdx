@@ -4,11 +4,19 @@ static PlaydateAPI* pd = NULL;
 
 static int threelib_dealloc(lua_State* L);
 static int threelib_init(lua_State* L);
+static int threelib_set_background(lua_State* L);
+static int threelib_add_triangle(lua_State* L);
+static int threelib_update_triangle(lua_State* L);
+static int threelib_remove_triangle(lua_State* L);
 static int threelib_draw(lua_State* L);
 
 static const lua_reg threelib[] = {
 	{ "__gc", threelib_dealloc },
 	{ "init", threelib_init },
+	{ "setBackground", threelib_set_background },
+	{ "add", threelib_add_triangle },
+	{ "update", threelib_update_triangle },
+	{ "remove", threelib_remove_triangle },
 	{ "draw", threelib_draw },
 	{ NULL, NULL }
 };
@@ -29,9 +37,18 @@ int eventHandler(PlaydateAPI* playdate, PDSystemEvent event, uint32_t arg) {
 }
 
 typedef struct {
-	int x1, y1, z1;
-	int x2, y2, z2;
-	int x3, y3, z3;
+	int x, y;
+} Int2;
+
+typedef struct {
+	float x, y, z;
+} Float3;
+
+typedef struct {
+	Float3 p0;
+	Float3 p1;
+	Float3 p2;
+	int8_t color;
 } Triangle;
 
 typedef struct {
@@ -42,50 +59,238 @@ typedef struct {
 } Triangles;
 
 static int threelib_dealloc(lua_State* L) {
-	Triangles* t = pd->lua->getArgObject(1, "threelib.triangles", NULL);
+	Triangles* ts = pd->lua->getArgObject(1, "threelib.triangles", NULL);
 
-	if (t->triangles) pd->system->realloc(t->triangles, 0);
-	pd->system->realloc(t->fb, 0);
-	pd->system->realloc(t, 0);
+	if (ts->triangles) pd->system->realloc(ts->triangles, 0);
+	pd->system->realloc(ts->fb, 0);
+	pd->system->realloc(ts, 0);
 
 	pd->system->logToConsole("dealloc");
 	return 0;
 }
 
 static int threelib_init(lua_State* L) {
-	Triangles* t = pd->system->realloc(NULL, sizeof(Triangles));
-	t->count = 0;
-	t->triangles = NULL;
+	Triangles* ts = pd->system->realloc(NULL, sizeof(Triangles));
+	ts->count = 0;
+	ts->triangles = NULL;
 
-	// clear framebuffer
-	t->bg = 0;
+	// zero frame buffer
+	ts->bg = 127;
 	int num_pixels = LCD_COLUMNS * LCD_ROWS;
-	t->fb = pd->system->realloc(NULL, sizeof(float) * num_pixels);
+	ts->fb = pd->system->realloc(NULL, sizeof(float) * num_pixels);
 	for (int i = 0; i < num_pixels; i++) {
-		t->fb[i] = 0;
+		ts->fb[i] = 0;
 	}
 
-	pd->lua->pushObject(t, "threelib.triangles", 0);
+	pd->lua->pushObject(ts, "threelib.triangles", 0);
 
 	pd->system->logToConsole("triangles init");
 	return 1;
 }
 
-void threelib_draw_fb(Triangles *t) {
-	int8_t* fb = t->fb;
+static int threelib_set_background(lua_State* L) {
+	Triangles* ts = pd->lua->getArgObject(1, "threelib.triangles", NULL);
+	ts->bg = pd->lua->getArgInt(2);
+	return 0;
+}
 
-	// draw triangles - 0 black 127 white
+static int threelib_add_triangle(lua_State* L) {
+	Triangles* ts = pd->lua->getArgObject(1, "threelib.triangles", NULL);
+	float x1 = pd->lua->getArgFloat(2);
+	float y1 = pd->lua->getArgFloat(3);
+	float z1 = 0.0;
+	float x2 = pd->lua->getArgFloat(4);
+	float y2 = pd->lua->getArgFloat(5);
+	float z2 = 0.0;
+	float x3 = pd->lua->getArgFloat(6);
+	float y3 = pd->lua->getArgFloat(7);
+	float z3 = 0.0;
+	int color = pd->lua->getArgInt(8);
+	
+	ts->count++;
+	ts->triangles = pd->system->realloc(ts->triangles, sizeof(Triangle) * ts->count);
+	Triangle* t = &ts->triangles[ts->count - 1];
+	t->p0.x = x1; t->p0.y = y1; t->p0.z = z1;
+	t->p1.x = x2; t->p1.y = y2; t->p1.z = z2;
+	t->p2.x = x3; t->p2.y = y3; t->p2.z = z3;
+	t->color = color;
+	
+	return 0;
+}
+
+static int threelib_update_triangle(lua_State* L) {
+	Triangles* ts = pd->lua->getArgObject(1, "threelib.triangles", NULL);
+	int idx = pd->lua->getArgInt(2) - 1;
+	if (idx < 0 || ts->count <= idx) return 0;
+
+	float x1 = pd->lua->getArgFloat(3);
+	float y1 = pd->lua->getArgFloat(4);
+	float z1 = 0.0;
+	float x2 = pd->lua->getArgFloat(5);
+	float y2 = pd->lua->getArgFloat(6);
+	float z2 = 0.0;
+	float x3 = pd->lua->getArgFloat(7);
+	float y3 = pd->lua->getArgFloat(8);
+	float z3 = 0.0;
+	int color = pd->lua->getArgInt(9);
+	
+	Triangle* t = &ts->triangles[idx];
+	t->p0.x = x1; t->p0.y = y1; t->p0.z = z1;
+	t->p1.x = x2; t->p1.y = y2; t->p1.z = z2;
+	t->p2.x = x3; t->p2.y = y3; t->p2.z = z3;
+	t->color = color;
+	return 0;
+}
+
+static int threelib_remove_triangle(lua_State* L) {
+	Triangles* ts = pd->lua->getArgObject(1, "threelib.triangles", NULL);
+	int idx = pd->lua->getArgInt(2) - 1;
+	if (idx < 0 || ts->count <= idx) return 0;
+	
+	for (int i = idx + 1; i < ts->count; i++) {
+		ts->triangles[i-1] = ts->triangles[i];
+	}
+
+	ts->count--;
+	pd->system->realloc(ts->triangles, sizeof(Triangle) * ts->count);
+	
+	return 0;
+}
+
+void threelib_draw_t2(int8_t* fb, Int2* a, Int2* b, Int2* c, int8_t color) {
+	// sort points by y
+	if (b->y < a->y) {
+		pd->system->logToConsole("flip a b");
+		threelib_draw_t2(fb, b, a, c, color);
+		return;
+	}
+	if (c->y < b->y) {
+		pd->system->logToConsole("flip b c");
+		threelib_draw_t2(fb, a, c, b, color);
+		return;
+	}
+	pd->system->logToConsole("draw %d %d", a->y, c->y);
+	
+	//   A
+	//  ....
+	//  ......B
+	// .....
+	// C.
+
+	if ((c->y < 0) || (LCD_ROWS <= a->y)) {
+		pd->system->logToConsole("offscreen");
+		return;
+	}
+
+	int ldx = (a->x <= c->x) ? c->x - a->x : a->x - c->x;
+	int ldy = (a->y <= c->y) ? a->y - c->y : c->y - a->y;
+	int lsx = (a->x <= c->x) ? 1 : -1;
+	int rdx = (a->x <= b->x) ? b->x - a->x : a->x - b->x;
+	int rdy = (a->y <= b->y) ? a->y - b->y : b->y - a->y;
+	int rsx = (a->x <= b->x) ? 1 : -1;
+	const int sy = 1;
+	int lerr = ldx + ldy;
+	int rerr = rdx + rdy;
+	int lx, rx;
+	lx = rx = a->x;
+	int ly, ry;
+	ly = ry = a->y;
+	int loop = 0;
+	int draw = 3; // bit flag l r
+	while (1) {
+		if (draw == 3) {
+			if (ry == b->y) {
+				// switch r from AB to BC
+				rdx = (b->x <= c->x) ? c->x - b->x : b->x - c->x;
+				rdy = (b->y <= c->y) ? b->y - c->y : c->y - b->y;
+				rsx = (b->x <= c->x) ? 1 : -1;
+				rerr = rdx + rdy;
+				rx = b->x;
+				ry = b->y;
+			}
+
+			if ((0 <= ly) && (ly < LCD_ROWS)) {
+				int yoff = ly * LCD_COLUMNS;
+				for (int x = lx; x <= rx; x++) {
+					if (x < 0 || LCD_COLUMNS <= x) continue; // offscreen
+					fb[x + yoff] = color;
+				}
+			}
+			draw = 0;
+		}
+
+		if ((c->y <= ly) && (c->y <= ry)) {
+			return;
+		}
+		if (loop++ > 1000) {
+			pd->system->logToConsole("oops");
+			return;
+		}
+
+		if ((draw & 2) == 0) {
+			int lerr2 = 2 * lerr;
+			if (lerr2 >= ldy) {
+				lerr += ldy;
+				lx += lsx;
+			}
+			if (lerr2 <= ldx) {
+				lerr += ldx;
+				ly += sy;
+				draw |= 2;
+			}
+		}
+		if ((draw & 1) == 0) {
+			int rerr2 = 2 * rerr;
+			if (rerr2 >= rdy) {
+				rerr += rdy;
+				rx += rsx;
+			}
+			if (rerr2 <= rdx) {
+				rerr += rdx;
+				ry += sy;
+				draw |= 1;
+			}
+		}
+	}
+}
+
+void threelib_draw_fb(Triangles* ts) {
+	int8_t* fb = ts->fb;
+
+	// draw background - 0 black 127 white
 	int fb_idx = 0;
 	for (int y = 0; y < LCD_ROWS; y++) {
 		for (int x = 0; x < LCD_COLUMNS; x++) {
-			fb[fb_idx] = t->bg;
-
+			fb[fb_idx] = ts->bg;
 			fb_idx++;
 		}
 	}
+	
+	// convert world space to screen space
+	// TODO: back face culling; viewport culling
+	Int2* t2 = pd->system->realloc(NULL, sizeof(Int2) * ts->count * 3);
+	for (int t_idx = 0; t_idx < ts->count; t_idx++) {
+		// TODO: actually do perspective
+		int t2_idx = 3 * t_idx;
+		t2[t2_idx].x     = (int)(ts->triangles[t_idx].p0.x);
+		t2[t2_idx].y     = (int)(ts->triangles[t_idx].p0.y);
+		t2[t2_idx + 1].x = (int)(ts->triangles[t_idx].p1.x);
+		t2[t2_idx + 1].y = (int)(ts->triangles[t_idx].p1.y);
+		t2[t2_idx + 2].x = (int)(ts->triangles[t_idx].p2.x);
+		t2[t2_idx + 2].y = (int)(ts->triangles[t_idx].p2.y);
+	}
+	
+	// draw triangles
+	for (int t_idx = 0; t_idx < ts->count; t_idx++) {
+		Triangle* t = ts->triangles + t_idx;
+		int t2_idx = 3 * t_idx;
+		threelib_draw_t2(fb, t2 + t2_idx, t2 + t2_idx + 1, t2 + t2_idx + 2, t->color);
+	}
+	
+	pd->system->realloc(t2, 0); // free screen space triangles
 
 	// dither - 0 black else white
-	// atkinson
+	// Atkinson
 	//   * 1 1
 	// 1 1 1  
 	//   1
@@ -122,12 +327,8 @@ void threelib_draw_fb(Triangles *t) {
 }
 
 static int threelib_draw(lua_State* L) {
-	Triangles* t = pd->lua->getArgObject(1, "threelib.triangles", NULL);
-	threelib_draw_fb(t);
-	t->bg++;
-	if (127 == t->bg) {
-		t->bg = 0;
-	}
+	Triangles* ts = pd->lua->getArgObject(1, "threelib.triangles", NULL);
+	threelib_draw_fb(ts);
 	
 	uint8_t* frame = pd->graphics->getFrame();
 	int bitpos = 0x80; // 1000 0000
@@ -136,7 +337,7 @@ static int threelib_draw(lua_State* L) {
 		uint8_t* row = &frame[y * LCD_ROWSIZE];
 		uint8_t chunk = 0x00; // black
 		for (int x = 0; x < LCD_COLUMNS; x++) {
-			if (t->fb[fb_idx]) {
+			if (ts->fb[fb_idx]) {
 				chunk ^= bitpos;
 			}
 

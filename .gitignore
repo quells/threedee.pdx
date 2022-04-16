@@ -1,4 +1,5 @@
 /.nova
+/.vscode
 /build
 /*.pdx
 /Source/pdex.bin
