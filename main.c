@@ -183,10 +183,10 @@ void threelib_draw_t2(int8_t* fb, Int2* a, Int2* b, Int2* c, int8_t color) {
 	}
 
 	int ldx = (a->x <= c->x) ? c->x - a->x : a->x - c->x;
-	int ldy = (a->y <= c->y) ? a->y - c->y : c->y - a->y;
+	int ldy = a->y - c->y; // points are already sorted
 	int lsx = (a->x <= c->x) ? 1 : -1;
 	int rdx = (a->x <= b->x) ? b->x - a->x : a->x - b->x;
-	int rdy = (a->y <= b->y) ? a->y - b->y : b->y - a->y;
+	int rdy = a->y - b->y; // points are already sorted
 	int rsx = (a->x <= b->x) ? 1 : -1;
 	const int sy = 1;
 	int lerr = ldx + ldy;
@@ -202,7 +202,7 @@ void threelib_draw_t2(int8_t* fb, Int2* a, Int2* b, Int2* c, int8_t color) {
 			if (ry == b->y) {
 				// switch r from AB to BC
 				rdx = (b->x <= c->x) ? c->x - b->x : b->x - c->x;
-				rdy = (b->y <= c->y) ? b->y - c->y : c->y - b->y;
+				rdy = b->y - c->y; // points are already sorted
 				rsx = (b->x <= c->x) ? 1 : -1;
 				rerr = rdx + rdy;
 				rx = b->x;
