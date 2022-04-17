@@ -4,3 +4,5 @@
 /*.pdx
 /Source/pdex.bin
 /Source/pdex.dylib
+
+.DS_Store

@@ -160,16 +160,13 @@ static int threelib_remove_triangle(lua_State* L) {
 void threelib_draw_t2(int8_t* fb, Int2* a, Int2* b, Int2* c, int8_t color) {
 	// sort points by y
 	if (b->y < a->y) {
-		pd->system->logToConsole("flip a b");
 		threelib_draw_t2(fb, b, a, c, color);
 		return;
 	}
 	if (c->y < b->y) {
-		pd->system->logToConsole("flip b c");
 		threelib_draw_t2(fb, a, c, b, color);
 		return;
 	}
-	pd->system->logToConsole("draw %d %d", a->y, c->y);
 	
 	//   A
 	//  ....
@@ -178,7 +175,6 @@ void threelib_draw_t2(int8_t* fb, Int2* a, Int2* b, Int2* c, int8_t color) {
 	// C.
 
 	if ((c->y < 0) || (LCD_ROWS <= a->y)) {
-		pd->system->logToConsole("offscreen");
 		return;
 	}
 
@@ -211,7 +207,16 @@ void threelib_draw_t2(int8_t* fb, Int2* a, Int2* b, Int2* c, int8_t color) {
 
 			if ((0 <= ly) && (ly < LCD_ROWS)) {
 				int yoff = ly * LCD_COLUMNS;
-				for (int x = lx; x <= rx; x++) {
+				// lx is not necessarily less than or equal to rx
+				int lo, hi;
+				if (lx < rx) {
+					lo = lx;
+					hi = rx;
+				} else {
+					lo = rx;
+					hi = lx;
+				}
+				for (int x = lo; x <= hi; x++) {
 					if (x < 0 || LCD_COLUMNS <= x) continue; // offscreen
 					fb[x + yoff] = color;
 				}
