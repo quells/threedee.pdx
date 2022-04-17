@@ -18,19 +18,47 @@ triangles:add(
 	color
 )
 
+triangles:add(
+	30, 15,
+	20, 35,
+	40, 35,
+	0
+)
+
+triangles:add(
+	370, 15,
+	380, 35,
+	360, 35,
+	127
+)
+
+triangles:add(
+	30, 225,
+	20, 205,
+	40, 205,
+	96
+)
+
+triangles:add(
+	370, 225,
+	380, 205,
+	360, 205,
+	32
+)
+
 playdate.display.setRefreshRate(50)
 
 local r = 100
 local t = 0
 function playdate.update()
-	-- r = (math.cos(2*t) + 2) * 50
-	x1 = math.floor(200 + r * math.cos(t))
-	y1 = math.floor(120 + r * math.sin(t))
-	x2 = math.floor(200 + r * math.cos(t + 2.09))
-	y2 = math.floor(120 + r * math.sin(t + 2.09))
-	x3 = math.floor(200 + r * math.cos(t - 2.09))
-	y3 = math.floor(120 + r * math.sin(t - 2.09))
-	color = math.floor((math.sin(t) + 1) * 63)
+	r = (math.cos(5*t) + 2) * 50
+	x1 = math.floor(200 + r * math.cos(7*t))
+	y1 = math.floor(120 + r * math.sin(7*t))
+	x2 = math.floor(200 + r * math.cos(7*t + 2.09))
+	y2 = math.floor(120 + r * math.sin(7*t + 2.09))
+	x3 = math.floor(200 + r * math.cos(7*t - 2.09))
+	y3 = math.floor(120 + r * math.sin(7*t - 2.09))
+	color = math.floor((math.sin(3*t) + 1) * 63)
 	triangles:update(
 		1,
 		x1, y1,
