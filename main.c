@@ -56,6 +56,9 @@ typedef struct {
 	Triangle* triangles;
 	int8_t* fb;
 	int8_t bg;
+
+	float camera_width;
+	float camera_f;
 } Triangles;
 
 static int threelib_dealloc(lua_State* L) {
@@ -82,6 +85,10 @@ static int threelib_init(lua_State* L) {
 		ts->fb[i] = 0;
 	}
 
+	// setup camera
+	ts->camera_width = 25.0; // Super 35 strip width in mm
+	ts->camera_f = 35.0; // mm focal length
+
 	pd->lua->pushObject(ts, "threelib.triangles", 0);
 
 	pd->system->logToConsole("triangles init");
@@ -98,14 +105,14 @@ static int threelib_add_triangle(lua_State* L) {
 	Triangles* ts = pd->lua->getArgObject(1, "threelib.triangles", NULL);
 	float x1 = pd->lua->getArgFloat(2);
 	float y1 = pd->lua->getArgFloat(3);
-	float z1 = 0.0;
-	float x2 = pd->lua->getArgFloat(4);
-	float y2 = pd->lua->getArgFloat(5);
-	float z2 = 0.0;
-	float x3 = pd->lua->getArgFloat(6);
-	float y3 = pd->lua->getArgFloat(7);
-	float z3 = 0.0;
-	int color = pd->lua->getArgInt(8);
+	float z1 = pd->lua->getArgFloat(4);
+	float x2 = pd->lua->getArgFloat(5);
+	float y2 = pd->lua->getArgFloat(6);
+	float z2 = pd->lua->getArgFloat(7);
+	float x3 = pd->lua->getArgFloat(8);
+	float y3 = pd->lua->getArgFloat(9);
+	float z3 = pd->lua->getArgFloat(10);
+	int color = pd->lua->getArgInt(11);
 	
 	ts->count++;
 	ts->triangles = pd->system->realloc(ts->triangles, sizeof(Triangle) * ts->count);
@@ -125,14 +132,14 @@ static int threelib_update_triangle(lua_State* L) {
 
 	float x1 = pd->lua->getArgFloat(3);
 	float y1 = pd->lua->getArgFloat(4);
-	float z1 = 0.0;
-	float x2 = pd->lua->getArgFloat(5);
-	float y2 = pd->lua->getArgFloat(6);
-	float z2 = 0.0;
-	float x3 = pd->lua->getArgFloat(7);
-	float y3 = pd->lua->getArgFloat(8);
-	float z3 = 0.0;
-	int color = pd->lua->getArgInt(9);
+	float z1 = pd->lua->getArgFloat(5);
+	float x2 = pd->lua->getArgFloat(6);
+	float y2 = pd->lua->getArgFloat(7);
+	float z2 = pd->lua->getArgFloat(8);
+	float x3 = pd->lua->getArgFloat(9);
+	float y3 = pd->lua->getArgFloat(10);
+	float z3 = pd->lua->getArgFloat(11);
+	int color = pd->lua->getArgInt(12);
 	
 	Triangle* t = &ts->triangles[idx];
 	t->p0.x = x1; t->p0.y = y1; t->p0.z = z1;
@@ -259,6 +266,9 @@ void threelib_draw_t2(int8_t* fb, Int2* a, Int2* b, Int2* c, int8_t color) {
 	}
 }
 
+const int HALF_SCREEN_WIDTH = LCD_COLUMNS / 2;
+const int HALF_SCREEN_HEIGHT = LCD_ROWS / 2;
+
 void threelib_draw_fb(Triangles* ts) {
 	int8_t* fb = ts->fb;
 
@@ -270,19 +280,30 @@ void threelib_draw_fb(Triangles* ts) {
 			fb_idx++;
 		}
 	}
-	
-	// convert world space to screen space
+
 	// TODO: back face culling; viewport culling
 	Int2* t2 = pd->system->realloc(NULL, sizeof(Int2) * ts->count * 3);
+	float vp2screen = LCD_COLUMNS / ts->camera_width;
 	for (int t_idx = 0; t_idx < ts->count; t_idx++) {
-		// TODO: actually do perspective
 		int t2_idx = 3 * t_idx;
-		t2[t2_idx].x     = (int)(ts->triangles[t_idx].p0.x);
-		t2[t2_idx].y     = (int)(ts->triangles[t_idx].p0.y);
-		t2[t2_idx + 1].x = (int)(ts->triangles[t_idx].p1.x);
-		t2[t2_idx + 1].y = (int)(ts->triangles[t_idx].p1.y);
-		t2[t2_idx + 2].x = (int)(ts->triangles[t_idx].p2.x);
-		t2[t2_idx + 2].y = (int)(ts->triangles[t_idx].p2.y);
+		// world space to viewport
+		// TODO: apply camera rotation and translation
+		float iz = 1.0f / ts->triangles[t_idx].p0.z;
+		float x0 = (ts->triangles[t_idx].p0.x - HALF_SCREEN_WIDTH) * ts->camera_f * iz;
+		float y0 = (ts->triangles[t_idx].p0.y - HALF_SCREEN_HEIGHT) * ts->camera_f * iz;
+		iz = 1.0f / ts->triangles[t_idx].p1.z;
+		float x1 = (ts->triangles[t_idx].p1.x - HALF_SCREEN_WIDTH) * ts->camera_f * iz;
+		float y1 = (ts->triangles[t_idx].p1.y - HALF_SCREEN_HEIGHT) * ts->camera_f * iz;
+		iz = 1.0f / ts->triangles[t_idx].p2.z;
+		float x2 = (ts->triangles[t_idx].p2.x - HALF_SCREEN_WIDTH) * ts->camera_f * iz;
+		float y2 = (ts->triangles[t_idx].p2.y - HALF_SCREEN_HEIGHT) * ts->camera_f * iz;
+		// viewport to screen
+		t2[t2_idx].x     = (int)(x0 * vp2screen) + HALF_SCREEN_WIDTH;
+		t2[t2_idx].y     = (int)(y0 * vp2screen) + HALF_SCREEN_HEIGHT;
+		t2[t2_idx + 1].x = (int)(x1 * vp2screen) + HALF_SCREEN_WIDTH;
+		t2[t2_idx + 1].y = (int)(y1 * vp2screen) + HALF_SCREEN_HEIGHT;
+		t2[t2_idx + 2].x = (int)(x2 * vp2screen) + HALF_SCREEN_WIDTH;
+		t2[t2_idx + 2].y = (int)(y2 * vp2screen) + HALF_SCREEN_HEIGHT;
 	}
 	
 	// draw triangles
