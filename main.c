@@ -266,6 +266,9 @@ void threelib_draw_t2(int8_t* fb, Int2* a, Int2* b, Int2* c, int8_t color) {
 	}
 }
 
+const int HALF_SCREEN_WIDTH = LCD_COLUMNS / 2;
+const int HALF_SCREEN_HEIGHT = LCD_ROWS / 2;
+
 void threelib_draw_fb(Triangles* ts) {
 	int8_t* fb = ts->fb;
 
@@ -286,21 +289,21 @@ void threelib_draw_fb(Triangles* ts) {
 		// world space to viewport
 		// TODO: apply camera rotation and translation
 		float iz = 1.0f / ts->triangles[t_idx].p0.z;
-		float x0 = ts->triangles[t_idx].p0.x * ts->camera_f * iz;
-		float y0 = ts->triangles[t_idx].p0.y * ts->camera_f * iz;
+		float x0 = (ts->triangles[t_idx].p0.x - HALF_SCREEN_WIDTH) * ts->camera_f * iz;
+		float y0 = (ts->triangles[t_idx].p0.y - HALF_SCREEN_HEIGHT) * ts->camera_f * iz;
 		iz = 1.0f / ts->triangles[t_idx].p1.z;
-		float x1 = ts->triangles[t_idx].p1.x * ts->camera_f * iz;
-		float y1 = ts->triangles[t_idx].p1.y * ts->camera_f * iz;
+		float x1 = (ts->triangles[t_idx].p1.x - HALF_SCREEN_WIDTH) * ts->camera_f * iz;
+		float y1 = (ts->triangles[t_idx].p1.y - HALF_SCREEN_HEIGHT) * ts->camera_f * iz;
 		iz = 1.0f / ts->triangles[t_idx].p2.z;
-		float x2 = ts->triangles[t_idx].p2.x * ts->camera_f * iz;
-		float y2 = ts->triangles[t_idx].p2.y * ts->camera_f * iz;
+		float x2 = (ts->triangles[t_idx].p2.x - HALF_SCREEN_WIDTH) * ts->camera_f * iz;
+		float y2 = (ts->triangles[t_idx].p2.y - HALF_SCREEN_HEIGHT) * ts->camera_f * iz;
 		// viewport to screen
-		t2[t2_idx].x     = (int)(x0 * vp2screen);
-		t2[t2_idx].y     = (int)(y0 * vp2screen);
-		t2[t2_idx + 1].x = (int)(x1 * vp2screen);
-		t2[t2_idx + 1].y = (int)(y1 * vp2screen);
-		t2[t2_idx + 2].x = (int)(x2 * vp2screen);
-		t2[t2_idx + 2].y = (int)(y2 * vp2screen);
+		t2[t2_idx].x     = (int)(x0 * vp2screen) + HALF_SCREEN_WIDTH;
+		t2[t2_idx].y     = (int)(y0 * vp2screen) + HALF_SCREEN_HEIGHT;
+		t2[t2_idx + 1].x = (int)(x1 * vp2screen) + HALF_SCREEN_WIDTH;
+		t2[t2_idx + 1].y = (int)(y1 * vp2screen) + HALF_SCREEN_HEIGHT;
+		t2[t2_idx + 2].x = (int)(x2 * vp2screen) + HALF_SCREEN_WIDTH;
+		t2[t2_idx + 2].y = (int)(y2 * vp2screen) + HALF_SCREEN_HEIGHT;
 	}
 	
 	// draw triangles
