@@ -4,5 +4,6 @@
 /*.pdx
 /Source/pdex.bin
 /Source/pdex.dylib
+/tools/__pycache__
 
 .DS_Store
