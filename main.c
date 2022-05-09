@@ -1,5 +1,7 @@
 #include "pd_api.h"
 
+#define MEASURE_PERFORANCE 1
+
 static PlaydateAPI* pd = NULL;
 
 static int threelib_dealloc(lua_State* L);
@@ -268,20 +270,23 @@ void threelib_draw_t2(int8_t* fb, Int2* a, Int2* b, Int2* c, int8_t color) {
 
 const int HALF_SCREEN_WIDTH = LCD_COLUMNS / 2;
 const int HALF_SCREEN_HEIGHT = LCD_ROWS / 2;
+const int NUM_PIXELS = LCD_ROWS * LCD_COLUMNS;
+
+#ifdef MEASURE_PERFORANCE
+static float two_d, triangles, dither, bench_n;
+#endif
 
 void threelib_draw_fb(Triangles* ts) {
 	int8_t* fb = ts->fb;
 
 	// draw background - 0 black 127 white
 	int fb_idx = 0;
-	for (int y = 0; y < LCD_ROWS; y++) {
-		for (int x = 0; x < LCD_COLUMNS; x++) {
-			fb[fb_idx] = ts->bg;
-			fb_idx++;
-		}
-	}
+	memset(fb, ts->bg, NUM_PIXELS);
 
 	// TODO: back face culling; viewport culling
+#ifdef MEASURE_PERFORANCE
+	pd->system->resetElapsedTime();
+#endif
 	Int2* t2 = pd->system->realloc(NULL, sizeof(Int2) * ts->count * 3);
 	float vp2screen = LCD_COLUMNS / ts->camera_width;
 	for (int t_idx = 0; t_idx < ts->count; t_idx++) {
@@ -305,29 +310,40 @@ void threelib_draw_fb(Triangles* ts) {
 		t2[t2_idx + 2].x = (int)(x2 * vp2screen) + HALF_SCREEN_WIDTH;
 		t2[t2_idx + 2].y = (int)(y2 * vp2screen) + HALF_SCREEN_HEIGHT;
 	}
+#ifdef MEASURE_PERFORANCE
+	two_d += pd->system->getElapsedTime();
+#endif
 	
 	// draw triangles
+#ifdef MEASURE_PERFORANCE
+	pd->system->resetElapsedTime();
+#endif
 	for (int t_idx = 0; t_idx < ts->count; t_idx++) {
 		Triangle* t = ts->triangles + t_idx;
 		int t2_idx = 3 * t_idx;
 		threelib_draw_t2(fb, t2 + t2_idx, t2 + t2_idx + 1, t2 + t2_idx + 2, t->color);
 	}
-	
+#ifdef MEASURE_PERFORANCE
+	triangles += pd->system->getElapsedTime();
+#endif
+
 	pd->system->realloc(t2, 0); // free screen space triangles
 
 	// dither - 0 black else white
-	// Atkinson
+#ifdef MEASURE_PERFORANCE
+	pd->system->resetElapsedTime();
+#endif
+	fb_idx = 0;
 	//   * 1 1
 	// 1 1 1  
 	//   1
-	fb_idx = 0;
 	int8_t v, out, err;
 	for (int y = 0; y < LCD_ROWS; y++) {
 		for (int x = 0; x < LCD_COLUMNS; x++) {
 			v = fb[fb_idx];
 			out = (64 < v) ? 127 : 0;
 			fb[fb_idx] = out;
-			err = (v - out) / 8;
+			err = (v - out) >> 3;
 			if (x < LCD_COLUMNS-1) {
 				fb[fb_idx + 1] += err;
 				if (x < LCD_COLUMNS-2) {
@@ -350,12 +366,25 @@ void threelib_draw_fb(Triangles* ts) {
 			fb_idx++;
 		}
 	}
+#ifdef MEASURE_PERFORANCE
+	dither += pd->system->getElapsedTime();
+	bench_n += 1.0f;
+	pd->system->logToConsole("2d %f triangles %f dither %f", two_d/bench_n, triangles/bench_n, dither/bench_n);
+#endif
 }
 
 static int threelib_draw(lua_State* L) {
 	Triangles* ts = pd->lua->getArgObject(1, "threelib.triangles", NULL);
+
+#ifdef MEASURE_PERFORANCE
+	pd->system->resetElapsedTime();
+#endif
 	threelib_draw_fb(ts);
-	
+#ifdef MEASURE_PERFORANCE
+	float render = pd->system->getElapsedTime();
+	pd->system->resetElapsedTime();
+#endif
+
 	uint8_t* frame = pd->graphics->getFrame();
 	int bitpos = 0x80; // 1000 0000
 	int fb_idx = 0;
@@ -377,6 +406,11 @@ static int threelib_draw(lua_State* L) {
 		}
 	}
 	pd->graphics->markUpdatedRows(0, LCD_ROWS);
+
+#ifdef MEASURE_PERFORANCE
+	float draw = pd->system->getElapsedTime();
+	pd->system->logToConsole("render %f draw %f", render, draw);
+#endif
 	
 	return 0;
 }

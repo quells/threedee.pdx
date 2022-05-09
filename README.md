@@ -8,3 +8,15 @@ dithered to 1-bit for the Playdate display.
 So far 3D triangles are supported with a fixed camera:
 
 ![Spinning Triangle](https://github.com/quells/threedee.pdx/raw/main/Spinning%20Triangle.gif)
+
+Real Device Performance
+
+```
+background 0.005
+2d         0.001
+triangles  0.001
+dither     0.036
+
+render 0.037
+draw   0.008
+```
