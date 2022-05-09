@@ -2,6 +2,8 @@ local gfx = playdate.graphics
 
 local triangles = threelib.triangles:init()
 
+triangles:load_model("cube.3d")
+
 triangles:setBackground(63)
 
 local x1 = 0

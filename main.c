@@ -8,6 +8,7 @@ static int threelib_set_background(lua_State* L);
 static int threelib_add_triangle(lua_State* L);
 static int threelib_update_triangle(lua_State* L);
 static int threelib_remove_triangle(lua_State* L);
+static int threelib_load_model(lua_State* L);
 static int threelib_draw(lua_State* L);
 
 static const lua_reg threelib[] = {
@@ -17,6 +18,7 @@ static const lua_reg threelib[] = {
 	{ "add", threelib_add_triangle },
 	{ "update", threelib_update_triangle },
 	{ "remove", threelib_remove_triangle },
+	{ "load_model", threelib_load_model },
 	{ "draw", threelib_draw },
 	{ NULL, NULL }
 };
@@ -378,5 +380,155 @@ static int threelib_draw(lua_State* L) {
 	}
 	pd->graphics->markUpdatedRows(0, LCD_ROWS);
 	
+	return 0;
+}
+
+int read_vlq(SDFile* f) {
+	char* buf = pd->system->realloc(NULL, 5);
+	char* buf_ptr = buf;
+	int n = 0;
+	for (; n < 5; n++) {
+		if (pd->file->read(f, buf_ptr, 1) != 1) {
+			pd->system->realloc(buf, 0);
+			return -1;
+		}
+		pd->system->logToConsole("%d %x", n, *buf_ptr);
+		if ((*buf_ptr & 0x80) == 0) {
+			break;
+		}
+		buf_ptr++;
+	}
+	int result = 0;
+	for (; n >= 0; n--) {
+		result <<= 7;
+		pd->system->logToConsole("%d %x", n, *buf_ptr);
+		result |= *buf_ptr;
+		buf_ptr--;
+	}
+
+	pd->system->realloc(buf, 0);
+	return result;
+}
+
+static int threelib_load_model(lua_State* L) {
+	Triangles* ts = pd->lua->getArgObject(1, "threelib.triangles", NULL);
+	const char* filename = pd->lua->getArgString(2);
+
+	SDFile* f = pd->file->open(filename, kFileRead);
+	if (f == NULL) {
+		const char* ferr = pd->file->geterr();
+		pd->system->logToConsole("failed to open %s: %s", filename, ferr);
+		goto cleanup;
+	}
+
+	char got_magic[5];
+	if (pd->file->read(f, &got_magic, 4) != 4) {
+		pd->system->logToConsole("failed to read magic bytes of %s", filename);
+		goto cleanup;
+	}
+	got_magic[4] = 0;
+	const char* want_magic = "KW3D";
+	if (strncmp(got_magic, want_magic, 4) != 0) {
+		pd->system->logToConsole("magic bytes of %s did not match expected value: %s", filename, got_magic);
+		goto cleanup;
+	}
+
+	char version[2];
+	if (pd->file->read(f, &version, 2) != 2) {
+		pd->system->logToConsole("failed to read version of %s", filename);
+		goto cleanup;
+	}
+
+	int num_materials = read_vlq(f);
+	if (num_materials == -1) {
+		const char* ferr = pd->file->geterr();
+		pd->system->logToConsole("failed to read vlq num_materials in %s: %s", filename, ferr);
+		goto cleanup;
+	}
+	pd->system->logToConsole("%d materials", num_materials);
+	if (pd->file->seek(f, 2*num_materials, SEEK_CUR) != 0) {
+		pd->system->logToConsole("failed to seek past materials of %s", filename);
+		goto cleanup;
+	}
+
+	int num_meshes = read_vlq(f);
+	if (num_meshes == -1) {
+		const char* ferr = pd->file->geterr();
+		pd->system->logToConsole("failed to read vlq num_meshes in %s: %s", filename, ferr);
+		goto cleanup;
+	}
+	pd->system->logToConsole("%d meshes", num_meshes);
+
+	for (int mesh_idx = 0; mesh_idx < num_meshes; mesh_idx++) {
+		int material_idx = read_vlq(f);
+		if (material_idx == -1) {
+			const char* ferr = pd->file->geterr();
+			pd->system->logToConsole("failed to read vlq material_idx in %s: %s", filename, ferr);
+			goto cleanup;
+		}
+		pd->system->logToConsole("material %d", material_idx);
+
+		int num_vertices = read_vlq(f);
+		if (num_vertices == -1) {
+			const char* ferr = pd->file->geterr();
+			pd->system->logToConsole("failed to read vlq num_vertices in %s: %s", filename, ferr);
+			goto cleanup;
+		}
+		pd->system->logToConsole("%d vertices", num_vertices);
+
+		float* vertices = pd->system->realloc(NULL, 3 * num_vertices * 4); // xyz f32
+		if (pd->file->read(f, vertices, 3 * num_vertices * 4) == -1) {
+			const char* ferr = pd->file->geterr();
+			pd->system->logToConsole("failed to read vertices in %s: %s", filename, ferr);
+			pd->system->realloc(vertices, 0);
+			goto cleanup;
+		}
+		for (int v = 0; v < 3 * num_vertices; v += 3) {
+			float x = *(vertices + v);
+			float y = *(vertices + v + 1);
+			float z = *(vertices + v + 2);
+			pd->system->logToConsole("vertex %f %f %f", x, y ,z);
+		}
+		pd->system->realloc(vertices, 0);
+
+		int num_normals = read_vlq(f);
+		if (num_normals == -1) {
+			const char* ferr = pd->file->geterr();
+			pd->system->logToConsole("failed to read vlq num_normals in %s: %s", filename, ferr);
+			goto cleanup;
+		}
+		pd->system->logToConsole("%d normals", num_normals);
+
+		float* normals = pd->system->realloc(NULL, 3 * num_normals * 4); // xyz f32
+		if (pd->file->read(f, normals, 3 * num_normals * 4) == -1) {
+			const char* ferr = pd->file->geterr();
+			pd->system->logToConsole("failed to read normals in %s: %s", filename, ferr);
+			pd->system->realloc(normals, 0);
+			goto cleanup;
+		}
+		for (int v = 0; v < 3 * num_vertices; v += 3) {
+			float x = *(normals + v);
+			float y = *(normals + v + 1);
+			float z = *(normals + v + 2);
+			pd->system->logToConsole("normal %f %f %f", x, y ,z);
+		}
+		pd->system->realloc(normals, 0);
+
+		int num_triangles = read_vlq(f);
+		if (num_triangles == -1) {
+			const char* ferr = pd->file->geterr();
+			pd->system->logToConsole("failed to read vlq num_triangles in %s: %s", filename, ferr);
+			goto cleanup;
+		}
+		pd->system->logToConsole("%d triangles", num_triangles);
+	}
+
+cleanup:
+	if (f != NULL) {
+		if (pd->file->close(f) == -1) {
+			const char* cerr = pd->file->geterr();
+			pd->system->logToConsole("failed to close %s: %s", filename, cerr);
+		}
+	}
 	return 0;
 }
